@@ -37,10 +37,24 @@ const transporter = nodemailer.createTransport({
   }
 });
 
-// API Routes
+// Health check route
+app.get('/api/health', (req, res) => {
+  const dbStatus = mongoose.connection.readyState === 1 ? 'connected' : 'disconnected';
+  res.json({ status: 'ok', database: dbStatus });
+});
+
+// Middleware to check DB connection
+const checkDbConnection = (req, res, next) => {
+  if (mongoose.connection.readyState !== 1) {
+    return res.status(503).json({
+      error: 'Database not connected. Please verify MONGODB_URI and MongoDB Atlas IP access (0.0.0.0/0).'
+    });
+  }
+  next();
+};
 
 // Get all clients
-app.get('/api/clients', async (req, res) => {
+app.get('/api/clients', checkDbConnection, async (req, res) => {
   try {
     const clients = await Client.find().sort({ createdAt: -1 });
     res.json(clients);
@@ -50,7 +64,7 @@ app.get('/api/clients', async (req, res) => {
 });
 
 // Add new client
-app.post('/api/clients', async (req, res) => {
+app.post('/api/clients', checkDbConnection, async (req, res) => {
   try {
     const { name, email, lendingPage, expiryDuration, expires, accessUrl } = req.body;
 
