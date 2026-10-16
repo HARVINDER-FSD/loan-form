@@ -1,5 +1,7 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import './App.css'
+
+const API_BASE_URL = 'http://localhost:5000/api'
 
 const LENDING_PAGES = [
   {
@@ -19,88 +21,10 @@ const LENDING_PAGES = [
   },
 ]
 
-const EXPIRY_DURATIONS = [
-  '7 Days',
-  '14 Days',
-  '30 Days',
-  '60 Days',
-  '90 Days',
-]
-
-const initialClients = [
-  {
-    id: 1,
-    name: 'harvinder singh',
-    email: 'harvindersingh2@gmail.com',
-    expires: '12/11/2026',
-    status: 'pending',
-    toRemove: true,
-  },
-  {
-    id: 2,
-    name: 'a',
-    email: 'a@gmail.com',
-    expires: '12/11/2026',
-    status: 'approved',
-    toRemove: false,
-  },
-  {
-    id: 3,
-    name: 'Demo',
-    email: 'harvindr1993@gmail.com',
-    expires: '12/11/2026',
-    status: 'deactivated',
-    toRemove: false,
-  },
-  {
-    id: 4,
-    name: 'a',
-    email: 'a@gmail.com',
-    expires: '12/11/2026',
-    status: 'approved',
-    toRemove: false,
-  },
-  {
-    id: 5,
-    name: 'demo',
-    email: 'adkspd@gmail.com',
-    expires: '12/11/2026',
-    status: 'pending',
-    toRemove: false,
-  },
-  {
-    id: 6,
-    name: 'demo',
-    email: 'harvinder@gmail.com',
-    expires: '12/11/2026',
-    status: 'deactivated',
-    toRemove: false,
-  },
-  {
-    id: 7,
-    name: 'APP',
-    email: 'amritalliancesolar50@gmail.com',
-    expires: '12/11/2026',
-    status: 'pending',
-    toRemove: false,
-  },
-  {
-    id: 8,
-    name: 'HS',
-    email: 'avneet@gmail.com',
-    expires: '12/11/2026',
-    status: 'pending',
-    toRemove: true,
-  },
-  {
-    id: 9,
-    name: 'a',
-    email: 'a@gmail.com',
-    expires: '12/11/2026',
-    status: 'approved',
-    toRemove: false,
-  },
-]
+const EXPIRY_DURATIONS = Array.from({ length: 30 }, (_, i) => {
+  const days = i + 1
+  return `${days} ${days === 1 ? 'Day' : 'Days'}`
+})
 
 function App() {
   const [form, setForm] = useState({
@@ -111,46 +35,76 @@ function App() {
   })
   const [addedClient, setAddedClient] = useState(null)
   const [copied, setCopied] = useState(false)
-  const [clients, setClients] = useState(initialClients)
+  const [clients, setClients] = useState([])
+
+  useEffect(() => {
+    fetchClients()
+  }, [])
+
+  const fetchClients = async () => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/clients`)
+      const data = await res.json()
+      setClients(data)
+    } catch (err) {
+      console.error('Error fetching clients:', err)
+    }
+  }
 
   const handleChange = (field, value) => {
     setForm((prev) => ({ ...prev, [field]: value }))
   }
 
-  const handleAddClient = () => {
+  const handleAddClient = async () => {
     if (!form.name.trim() || !form.email.trim()) return
-    const newClient = {
-      id: Date.now(),
-      name: form.name,
-      email: form.email,
-      expires: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
-        .toLocaleDateString('en-US', {
-          month: '2-digit',
-          day: '2-digit',
-          year: 'numeric',
-        }),
-      status: 'pending',
-      toRemove: false,
-    }
-    setClients((prev) => [newClient, ...prev])
+
+    const expiryDays = parseInt(form.expiry)
+    const expires = new Date(Date.now() + expiryDays * 24 * 60 * 60 * 1000)
+      .toLocaleDateString('en-US', {
+        month: '2-digit',
+        day: '2-digit',
+        year: 'numeric',
+      })
+
     const selectedPage = LENDING_PAGES.find(
       (p) => p.label === form.lendingPage
     )
-    setAddedClient({
+    const accessUrl = selectedPage ? selectedPage.url : ''
+
+    const clientData = {
       name: form.name,
       email: form.email,
-      accessUrl: selectedPage
-        ? selectedPage.url
-        : `https://loan-hub-usa-eight.vercel.app/client/${encodeURIComponent(
-            form.email
-          )}`,
-    })
-    setForm({
-      name: '',
-      email: '',
-      lendingPage: LENDING_PAGES[0].label,
-      expiry: '30 Days',
-    })
+      lendingPage: form.lendingPage,
+      expiryDuration: form.expiry,
+      expires: expires,
+      accessUrl: accessUrl,
+    }
+
+    try {
+      const res = await fetch(`${API_BASE_URL}/clients`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(clientData),
+      })
+
+      if (res.ok) {
+        const newClient = await res.json()
+        setClients((prev) => [newClient, ...prev])
+        setAddedClient({
+          name: form.name,
+          email: form.email,
+          accessUrl: accessUrl,
+        })
+        setForm({
+          name: '',
+          email: '',
+          lendingPage: LENDING_PAGES[0].label,
+          expiry: '30 Days',
+        })
+      }
+    } catch (err) {
+      console.error('Error adding client:', err)
+    }
   }
 
   const handleCopyUrl = async () => {
@@ -171,16 +125,38 @@ function App() {
     }
   }
 
-  const handleApprove = (id) => {
-    setClients((prev) =>
-      prev.map((c) => (c.id === id ? { ...c, status: 'approved' } : c))
-    )
+  const handleApprove = async (id) => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/clients/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'approved' }),
+      })
+      if (res.ok) {
+        setClients((prev) =>
+          prev.map((c) => (c._id === id ? { ...c, status: 'approved' } : c))
+        )
+      }
+    } catch (err) {
+      console.error('Error approving client:', err)
+    }
   }
 
-  const handleDeactivate = (id) => {
-    setClients((prev) =>
-      prev.map((c) => (c.id === id ? { ...c, status: 'deactivated' } : c))
-    )
+  const handleDeactivate = async (id) => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/clients/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'deactivated' }),
+      })
+      if (res.ok) {
+        setClients((prev) =>
+          prev.map((c) => (c._id === id ? { ...c, status: 'deactivated' } : c))
+        )
+      }
+    } catch (err) {
+      console.error('Error deactivating client:', err)
+    }
   }
 
   return (
@@ -226,6 +202,7 @@ function App() {
           <div className="form-group">
             <label>Token Expiry Duration</label>
             <select
+              className="expiry-select"
               value={form.expiry}
               onChange={(e) => handleChange('expiry', e.target.value)}
             >
@@ -245,15 +222,11 @@ function App() {
             <div className="access-box">
               <div className="access-row">
                 <span className="check-icon">✅</span>
-                <span>
-                  Client access granted to <strong>{addedClient.name}</strong>
-                </span>
+                <span>Client added successfully!</span>
               </div>
               <div className="access-row">
                 <span className="check-icon">✅</span>
-                <span>
-                  Email sent to <strong>{addedClient.email}</strong>
-                </span>
+                <span>Email sent successfully!</span>
               </div>
               <div className="access-row">
                 <span className="link-icon">🔗</span>
@@ -267,11 +240,13 @@ function App() {
           )}
         </div>
 
+        <hr className="divider" />
+
         <div className="clients-section">
           <h2 className="section-title">Existing Clients</h2>
           <div className="clients-list">
             {clients.map((client) => (
-              <div key={client.id} className="client-card">
+              <div key={client._id} className="client-card">
                 <div className="client-info">
                   <div className="client-name-row">
                     <span
@@ -289,15 +264,19 @@ function App() {
                   <div className="client-expires">Expires: {client.expires}</div>
                 </div>
                 <div className="client-actions">
+                  {client.status === 'approved' ? (
+                    <span className="status-active">Active</span>
+                  ) : (
+                    <button
+                      className="btn-status"
+                      onClick={() => handleApprove(client._id)}
+                    >
+                      Approve
+                    </button>
+                  )}
                   <button
-                    className={`btn-status ${client.status === 'approved' ? 'active' : ''}`}
-                    onClick={() => handleApprove(client.id)}
-                  >
-                    Approve
-                  </button>
-                  <button
-                    className={`btn-danger ${client.status === 'deactivated' ? 'active' : ''}`}
-                    onClick={() => handleDeactivate(client.id)}
+                    className="btn-danger"
+                    onClick={() => handleDeactivate(client._id)}
                   >
                     Deactivate
                   </button>
