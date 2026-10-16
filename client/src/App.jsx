@@ -45,9 +45,14 @@ function App() {
     try {
       const res = await fetch(`${API_BASE_URL}/clients`)
       const data = await res.json()
-      setClients(data)
+      if (Array.isArray(data)) {
+        setClients(data)
+      } else {
+        setClients([])
+      }
     } catch (err) {
       console.error('Error fetching clients:', err)
+      setClients([])
     }
   }
 
