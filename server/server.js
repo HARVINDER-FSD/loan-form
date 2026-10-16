@@ -9,10 +9,23 @@ app.use(cors());
 app.use(express.json());
 
 // MongoDB Connection
+let lastDbError = null;
 const mongoURI = process.env.MONGODB_URI;
-mongoose.connect(mongoURI)
-  .then(() => console.log('MongoDB connected successfully'))
-  .catch(err => console.error('MongoDB connection error:', err));
+
+if (!mongoURI) {
+  lastDbError = 'process.env.MONGODB_URI is MISSING on this server. Add it in Render Environment Variables.';
+  console.error(lastDbError);
+} else {
+  mongoose.connect(mongoURI)
+    .then(() => {
+      console.log('MongoDB connected successfully');
+      lastDbError = null;
+    })
+    .catch(err => {
+      lastDbError = err.message;
+      console.error('MongoDB connection error:', err.message);
+    });
+}
 
 // Client Schema
 const clientSchema = new mongoose.Schema({
@@ -40,7 +53,12 @@ const transporter = nodemailer.createTransport({
 // Health check route
 app.get('/api/health', (req, res) => {
   const dbStatus = mongoose.connection.readyState === 1 ? 'connected' : 'disconnected';
-  res.json({ status: 'ok', database: dbStatus });
+  res.json({
+    status: 'ok',
+    database: dbStatus,
+    hasMongoUri: Boolean(process.env.MONGODB_URI),
+    lastError: lastDbError
+  });
 });
 
 // Middleware to check DB connection
