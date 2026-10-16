@@ -61,14 +61,30 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-// Middleware to check DB connection
-const checkDbConnection = (req, res, next) => {
-  if (mongoose.connection.readyState !== 1) {
+// Middleware to check and auto-reconnect DB if needed
+const checkDbConnection = async (req, res, next) => {
+  if (mongoose.connection.readyState === 1) {
+    return next();
+  }
+
+  if (!mongoURI) {
     return res.status(503).json({
-      error: 'Database not connected. Please verify MONGODB_URI and MongoDB Atlas IP access (0.0.0.0/0).'
+      error: 'process.env.MONGODB_URI is missing. Add it in Render Environment Variables.'
     });
   }
-  next();
+
+  try {
+    await mongoose.connect(mongoURI);
+    lastDbError = null;
+    console.log('MongoDB auto-reconnected successfully');
+    next();
+  } catch (err) {
+    lastDbError = err.message;
+    console.error('MongoDB retry failed:', err.message);
+    return res.status(503).json({
+      error: `Database connection error: ${err.message}`
+    });
+  }
 };
 
 // Get all clients
