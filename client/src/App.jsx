@@ -201,17 +201,19 @@ function App() {
 
           <div className="form-group">
             <label>Token Expiry Duration</label>
-            <select
-              className="expiry-select"
-              value={form.expiry}
-              onChange={(e) => handleChange('expiry', e.target.value)}
-            >
-              {EXPIRY_DURATIONS.map((dur) => (
-                <option key={dur} value={dur}>
-                  {dur}
-                </option>
-              ))}
-            </select>
+            <div className="select-wrapper">
+              <select
+                className="expiry-select"
+                value={form.expiry}
+                onChange={(e) => handleChange('expiry', e.target.value)}
+              >
+                {EXPIRY_DURATIONS.map((dur) => (
+                  <option key={dur} value={dur}>
+                    {dur}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
 
           <button className="btn btn-primary" onClick={handleAddClient}>
