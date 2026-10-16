@@ -36,6 +36,7 @@ function App() {
   const [addedClient, setAddedClient] = useState(null)
   const [copied, setCopied] = useState(false)
   const [clients, setClients] = useState([])
+  const [loading, setLoading] = useState(false)
 
   useEffect(() => {
     fetchClients()
@@ -45,11 +46,7 @@ function App() {
     try {
       const res = await fetch(`${API_BASE_URL}/clients`)
       const data = await res.json()
-      if (Array.isArray(data)) {
-        setClients(data)
-      } else {
-        setClients([])
-      }
+      setClients(Array.isArray(data) ? data : [])
     } catch (err) {
       console.error('Error fetching clients:', err)
       setClients([])
@@ -62,18 +59,18 @@ function App() {
 
   const handleAddClient = async () => {
     if (!form.name.trim() || !form.email.trim()) return
+    setLoading(true)
 
     const expiryDays = parseInt(form.expiry)
-    const expires = new Date(Date.now() + expiryDays * 24 * 60 * 60 * 1000)
-      .toLocaleDateString('en-US', {
-        month: '2-digit',
-        day: '2-digit',
-        year: 'numeric',
-      })
+    const expiresDate = new Date()
+    expiresDate.setDate(expiresDate.getDate() + expiryDays)
+    const expires = expiresDate.toLocaleDateString('en-US', {
+      month: '2-digit',
+      day: '2-digit',
+      year: 'numeric',
+    })
 
-    const selectedPage = LENDING_PAGES.find(
-      (p) => p.label === form.lendingPage
-    )
+    const selectedPage = LENDING_PAGES.find((p) => p.label === form.lendingPage)
     const accessUrl = selectedPage ? selectedPage.url : ''
 
     const clientData = {
@@ -95,11 +92,7 @@ function App() {
       if (res.ok) {
         const newClient = await res.json()
         setClients((prev) => [newClient, ...prev])
-        setAddedClient({
-          name: form.name,
-          email: form.email,
-          accessUrl: accessUrl,
-        })
+        setAddedClient({ name: form.name, email: form.email, accessUrl: accessUrl })
         setForm({
           name: '',
           email: '',
@@ -109,6 +102,8 @@ function App() {
       }
     } catch (err) {
       console.error('Error adding client:', err)
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -119,14 +114,7 @@ function App() {
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
     } catch (err) {
-      const textarea = document.createElement('textarea')
-      textarea.value = addedClient.accessUrl
-      document.body.appendChild(textarea)
-      textarea.select()
-      document.execCommand('copy')
-      document.body.removeChild(textarea)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
+      console.error('Copy failed', err)
     }
   }
 
@@ -138,12 +126,10 @@ function App() {
         body: JSON.stringify({ status: 'approved' }),
       })
       if (res.ok) {
-        setClients((prev) =>
-          prev.map((c) => (c._id === id ? { ...c, status: 'approved' } : c))
-        )
+        setClients((prev) => prev.map((c) => (c._id === id ? { ...c, status: 'approved' } : c)))
       }
     } catch (err) {
-      console.error('Error approving client:', err)
+      console.error('Error approving:', err)
     }
   }
 
@@ -155,12 +141,10 @@ function App() {
         body: JSON.stringify({ status: 'deactivated' }),
       })
       if (res.ok) {
-        setClients((prev) =>
-          prev.map((c) => (c._id === id ? { ...c, status: 'deactivated' } : c))
-        )
+        setClients((prev) => prev.map((c) => (c._id === id ? { ...c, status: 'deactivated' } : c)))
       }
     } catch (err) {
-      console.error('Error deactivating client:', err)
+      console.error('Error deactivating:', err)
     }
   }
 
@@ -192,16 +176,18 @@ function App() {
 
           <div className="form-group">
             <label>Lending Page</label>
-            <select
-              value={form.lendingPage}
-              onChange={(e) => handleChange('lendingPage', e.target.value)}
-            >
-              {LENDING_PAGES.map((page) => (
-                <option key={page.label} value={page.label}>
-                  {page.icon} {page.label}
-                </option>
-              ))}
-            </select>
+            <div className="select-wrapper">
+              <select
+                value={form.lendingPage}
+                onChange={(e) => handleChange('lendingPage', e.target.value)}
+              >
+                {LENDING_PAGES.map((page) => (
+                  <option key={page.label} value={page.label}>
+                    {page.icon} {page.label}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
 
           <div className="form-group">
@@ -221,75 +207,61 @@ function App() {
             </div>
           </div>
 
-          <button className="btn btn-primary" onClick={handleAddClient}>
-            Add Client
+          <button className="btn btn-primary" onClick={handleAddClient} disabled={loading}>
+            {loading ? 'Adding...' : 'Add Client'}
           </button>
 
           {addedClient && (
-            <div className="access-box">
-              <div className="access-row">
-                <span className="check-icon">✅</span>
+            <div className="success-box">
+              <div className="success-row">
+                <span className="icon">✅</span>
                 <span>Client added successfully!</span>
               </div>
-              <div className="access-row">
-                <span className="check-icon">✅</span>
+              <div className="success-row">
+                <span className="icon">✅</span>
                 <span>Email sent successfully!</span>
               </div>
-              <div className="access-row">
-                <span className="link-icon">🔗</span>
-                <span className="access-url-label">Access URL:</span>
+              <div className="link-section">
+                <span className="label">🔗 Access URL:</span>
+                <div className="url-text">{addedClient.accessUrl}</div>
+                <button className="btn-copy" onClick={handleCopyUrl}>
+                  {copied ? 'Copied!' : 'Copy Link'}
+                </button>
               </div>
-              <div className="access-url">{addedClient.accessUrl}</div>
-              <button className="btn btn-copy" onClick={handleCopyUrl}>
-                {copied ? 'Copied!' : 'Copy URL to Clipboard'}
-              </button>
             </div>
           )}
         </div>
 
-        <hr className="divider" />
+        <div className="divider" />
 
         <div className="clients-section">
           <h2 className="section-title">Existing Clients</h2>
           <div className="clients-list">
-            {clients.map((client) => (
-              <div key={client._id} className="client-card">
-                <div className="client-info">
-                  <div className="client-name-row">
-                    <span
-                      className={`client-name ${
-                        client.toRemove ? 'to-remove' : ''
-                      }`}
-                    >
-                      {client.name}
-                    </span>
-                    {client.toRemove && (
-                      <span className="remove-tag">remove</span>
-                    )}
+            {clients.length === 0 ? (
+              <p className="no-data">No clients found or connecting to server...</p>
+            ) : (
+              clients.map((client) => (
+                <div key={client._id} className="client-card">
+                  <div className="client-info">
+                    <div className="name">{client.name}</div>
+                    <div className="email">{client.email}</div>
+                    <div className="expiry">Expires: {client.expires}</div>
                   </div>
-                  <div className="client-email">{client.email}</div>
-                  <div className="client-expires">Expires: {client.expires}</div>
-                </div>
-                <div className="client-actions">
-                  {client.status === 'approved' ? (
-                    <span className="status-active">Active</span>
-                  ) : (
-                    <button
-                      className="btn-status"
-                      onClick={() => handleApprove(client._id)}
-                    >
-                      Approve
+                  <div className="client-actions">
+                    {client.status === 'approved' ? (
+                      <span className="status-badge">Active</span>
+                    ) : (
+                      <button className="btn-approve" onClick={() => handleApprove(client._id)}>
+                        Approve
+                      </button>
+                    )}
+                    <button className="btn-danger" onClick={() => handleDeactivate(client._id)}>
+                      Deactivate
                     </button>
-                  )}
-                  <button
-                    className="btn-danger"
-                    onClick={() => handleDeactivate(client._id)}
-                  >
-                    Deactivate
-                  </button>
+                  </div>
                 </div>
-              </div>
-            ))}
+              ))
+            )}
           </div>
         </div>
       </div>
