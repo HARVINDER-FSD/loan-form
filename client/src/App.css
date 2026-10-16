@@ -40,17 +40,47 @@
 .form-group input,
 .form-group select {
   width: 100%;
-  padding: 8px 10px;
-  border: 1px solid #ccc;
-  border-radius: 4px;
-  font-size: 14px;
+  height: 42px;
+  padding: 8px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 15px;
   background: #fff;
-  color: #222;
+  color: #1f2937;
+  transition: all 0.2s ease;
+}
+
+.form-group select {
+  cursor: pointer;
+  appearance: none;
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  background-size: 16px;
+  padding-right: 40px;
 }
 
 .expiry-select {
-  width: auto !important;
-  min-width: 120px;
+  width: 100% !important;
+  max-width: 300px;
+  height: 45px;
+  font-size: 16px;
+  font-weight: 500;
+  cursor: pointer;
+  appearance: none;
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  background-size: 18px;
+  padding-right: 40px;
+  border: 1px solid #d1d5db;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+@media (max-width: 480px) {
+  .expiry-select {
+    max-width: 100%;
+  }
 }
 
 .form-group input:focus,
@@ -236,15 +266,47 @@
 }
 
 /* Responsiveness */
-@media (max-width: 480px) {
+@media (max-width: 640px) {
+  .container {
+    padding: 0 10px;
+  }
+  
+  .page-title {
+    font-size: 22px;
+  }
+  
+  .form-card {
+    padding: 15px;
+  }
+  
   .client-card {
     flex-direction: column;
-    align-items: flex-start;
-    gap: 15px;
+    align-items: stretch;
+    gap: 12px;
+    padding: 15px;
   }
   
   .client-actions {
     width: 100%;
-    justify-content: space-between;
+    justify-content: flex-start;
+    gap: 10px;
+    border-top: 1px solid #edf2f7;
+    padding-top: 12px;
+  }
+  
+  .btn-status, .btn-danger {
+    flex: 1;
+    text-align: center;
+    padding: 10px;
+  }
+}
+
+@media (max-width: 400px) {
+  .client-actions {
+    flex-direction: column;
+  }
+  
+  .btn-status, .btn-danger {
+    width: 100%;
   }
 }
