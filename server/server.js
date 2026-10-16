@@ -53,7 +53,7 @@ app.get('/api/clients', async (req, res) => {
 app.post('/api/clients', async (req, res) => {
   try {
     const { name, email, lendingPage, expiryDuration, expires, accessUrl } = req.body;
-    
+
     const newClient = new Client({
       name,
       email,
@@ -65,7 +65,7 @@ app.post('/api/clients', async (req, res) => {
 
     await newClient.save();
 
-    // Send Emails
+    // Send emails separately — email failure should NOT block the response
     const mailOptionsClient = {
       from: process.env.EMAIL_USER,
       to: email,
@@ -91,14 +91,17 @@ app.post('/api/clients', async (req, res) => {
       `
     };
 
-    // Send both emails
-    await Promise.all([
+    // Fire-and-forget: email errors won't cause 500
+    Promise.all([
       transporter.sendMail(mailOptionsClient),
       transporter.sendMail(mailOptionsCompany)
-    ]);
+    ]).catch(emailErr => {
+      console.error('Email sending failed (non-fatal):', emailErr.message);
+    });
 
     res.status(201).json(newClient);
   } catch (err) {
+    console.error('POST /api/clients error:', err.message);
     res.status(500).json({ error: err.message });
   }
 });

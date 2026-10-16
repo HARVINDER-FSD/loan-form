@@ -3,6 +3,22 @@ import './App.css'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://loan-form-6s6o.onrender.com/api'
 
+function validateForm(form) {
+  const errors = {}
+  if (!form.name.trim()) {
+    errors.name = 'Client name is required.'
+  } else if (form.name.trim().length < 2) {
+    errors.name = 'Name must be at least 2 characters.'
+  }
+  if (!form.email.trim()) {
+    errors.email = 'Client email is required.'
+  } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) {
+    errors.email = 'Please enter a valid email address.'
+  }
+  return errors
+}
+
+
 const LENDING_PAGES = [
   {
     label: 'Advance America Style Page',
@@ -97,6 +113,8 @@ function App() {
   const [copied, setCopied] = useState(false)
   const [clients, setClients] = useState([])
   const [loading, setLoading] = useState(false)
+  const [errors, setErrors] = useState({})
+  const [touched, setTouched] = useState({})
 
   useEffect(() => {
     fetchClients()
@@ -115,10 +133,23 @@ function App() {
 
   const handleChange = (field, value) => {
     setForm((prev) => ({ ...prev, [field]: value }))
+    // Clear error on change
+    if (errors[field]) {
+      setErrors((prev) => ({ ...prev, [field]: '' }))
+    }
+  }
+
+  const handleBlur = (field) => {
+    setTouched((prev) => ({ ...prev, [field]: true }))
+    const newErrors = validateForm({ ...form })
+    setErrors((prev) => ({ ...prev, [field]: newErrors[field] || '' }))
   }
 
   const handleAddClient = async () => {
-    if (!form.name.trim() || !form.email.trim()) return
+    const newErrors = validateForm(form)
+    setErrors(newErrors)
+    setTouched({ name: true, email: true })
+    if (Object.keys(newErrors).length > 0) return
     setLoading(true)
 
     const expiryDays = parseInt(form.expiry)
@@ -159,6 +190,8 @@ function App() {
           lendingPage: LENDING_PAGES[0].label,
           expiry: '30 Days',
         })
+        setErrors({})
+        setTouched({})
       }
     } catch (err) {
       console.error('Error adding client:', err)
@@ -237,8 +270,13 @@ function App() {
               type="text"
               value={form.name}
               onChange={(e) => handleChange('name', e.target.value)}
+              onBlur={() => handleBlur('name')}
               placeholder="Enter client name"
+              className={touched.name && errors.name ? 'input-error' : ''}
             />
+            {touched.name && errors.name && (
+              <span className="error-msg">⚠ {errors.name}</span>
+            )}
           </div>
 
           {/* Client Email */}
@@ -249,8 +287,13 @@ function App() {
               type="email"
               value={form.email}
               onChange={(e) => handleChange('email', e.target.value)}
+              onBlur={() => handleBlur('email')}
               placeholder="Enter client email"
+              className={touched.email && errors.email ? 'input-error' : ''}
             />
+            {touched.email && errors.email && (
+              <span className="error-msg">⚠ {errors.email}</span>
+            )}
           </div>
 
           {/* Lending Page */}
