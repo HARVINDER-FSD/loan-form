@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import './App.css'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://loan-form-6s6o.onrender.com/api'
@@ -25,6 +25,66 @@ const EXPIRY_DURATIONS = Array.from({ length: 30 }, (_, i) => {
   const days = i + 1
   return `${days} ${days === 1 ? 'Day' : 'Days'}`
 })
+
+function getInitial(name) {
+  return name ? name.trim().charAt(0).toUpperCase() : '?'
+}
+
+// Custom dropdown that always opens downward
+function ExpiryDropdown({ value, onChange }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef(null)
+
+  useEffect(() => {
+    function handleClickOutside(e) {
+      if (ref.current && !ref.current.contains(e.target)) {
+        setOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
+
+  return (
+    <div className="custom-dropdown" ref={ref}>
+      <button
+        type="button"
+        className="custom-dropdown-trigger"
+        onClick={() => setOpen((prev) => !prev)}
+      >
+        <span>{value}</span>
+        <svg
+          className={`dropdown-arrow ${open ? 'open' : ''}`}
+          xmlns="http://www.w3.org/2000/svg"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <polyline points="6 9 12 15 18 9" />
+        </svg>
+      </button>
+      {open && (
+        <ul className="custom-dropdown-list">
+          {EXPIRY_DURATIONS.map((dur) => (
+            <li
+              key={dur}
+              className={`custom-dropdown-item ${value === dur ? 'selected' : ''}`}
+              onClick={() => {
+                onChange(dur)
+                setOpen(false)
+              }}
+            >
+              {dur}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  )
+}
 
 function App() {
   const [form, setForm] = useState({
@@ -151,12 +211,29 @@ function App() {
   return (
     <div className="page">
       <div className="container">
-        <h1 className="page-title">Admin - Manage Clients</h1>
 
+        {/* ── HEADER ── */}
+        <div className="header">
+          <div className="header-badge">
+            <span className="header-badge-dot" />
+            Admin Panel
+          </div>
+          <h1 className="page-title">Manage Clients</h1>
+          <p className="page-subtitle">Create access links and manage loan client accounts</p>
+        </div>
+
+        {/* ── ADD CLIENT FORM ── */}
         <div className="form-card">
+          <div className="card-title">
+            <div className="card-title-icon">+</div>
+            Add New Client
+          </div>
+
+          {/* Client Name */}
           <div className="form-group">
-            <label>Client Name</label>
+            <label htmlFor="client-name">Client Name</label>
             <input
+              id="client-name"
               type="text"
               value={form.name}
               onChange={(e) => handleChange('name', e.target.value)}
@@ -164,9 +241,11 @@ function App() {
             />
           </div>
 
+          {/* Client Email */}
           <div className="form-group">
-            <label>Client Email</label>
+            <label htmlFor="client-email">Client Email</label>
             <input
+              id="client-email"
               type="email"
               value={form.email}
               onChange={(e) => handleChange('email', e.target.value)}
@@ -174,10 +253,12 @@ function App() {
             />
           </div>
 
+          {/* Lending Page */}
           <div className="form-group">
-            <label>Lending Page</label>
+            <label htmlFor="lending-page">Lending Page</label>
             <div className="select-wrapper">
               <select
+                id="lending-page"
                 value={form.lendingPage}
                 onChange={(e) => handleChange('lendingPage', e.target.value)}
               >
@@ -190,27 +271,33 @@ function App() {
             </div>
           </div>
 
+          {/* Token Expiry — Custom dropdown (always opens down) */}
           <div className="form-group">
             <label>Token Expiry Duration</label>
-            <div className="select-wrapper">
-              <select
-                className="expiry-select"
-                value={form.expiry}
-                onChange={(e) => handleChange('expiry', e.target.value)}
-              >
-                {EXPIRY_DURATIONS.map((dur) => (
-                  <option key={dur} value={dur}>
-                    {dur}
-                  </option>
-                ))}
-              </select>
-            </div>
+            <ExpiryDropdown
+              value={form.expiry}
+              onChange={(val) => handleChange('expiry', val)}
+            />
           </div>
 
-          <button className="btn btn-primary" onClick={handleAddClient} disabled={loading}>
-            {loading ? 'Adding...' : 'Add Client'}
+          {/* Submit */}
+          <button
+            id="add-client-btn"
+            className="btn btn-primary"
+            onClick={handleAddClient}
+            disabled={loading}
+          >
+            {loading ? (
+              <>
+                <span className="btn-spinner" />
+                Adding Client...
+              </>
+            ) : (
+              'Add Client'
+            )}
           </button>
 
+          {/* Success Box */}
           {addedClient && (
             <div className="success-box">
               <div className="success-row">
@@ -222,9 +309,13 @@ function App() {
                 <span>Email sent successfully!</span>
               </div>
               <div className="link-section">
-                <span className="label">🔗 Access URL:</span>
+                <span className="link-label">🔗 Access URL:</span>
                 <div className="url-text">{addedClient.accessUrl}</div>
-                <button className="btn-copy" onClick={handleCopyUrl}>
+                <button
+                  id="copy-url-btn"
+                  className={`btn-copy ${copied ? 'copied' : ''}`}
+                  onClick={handleCopyUrl}
+                >
                   {copied ? 'Copied!' : 'Copy Link'}
                 </button>
               </div>
@@ -234,14 +325,24 @@ function App() {
 
         <div className="divider" />
 
+        {/* ── EXISTING CLIENTS ── */}
         <div className="clients-section">
-          <h2 className="section-title">Existing Clients</h2>
+          <div className="section-header">
+            <h2 className="section-title">Existing Clients</h2>
+            {clients.length > 0 && (
+              <span className="clients-count">{clients.length}</span>
+            )}
+          </div>
+
           <div className="clients-list">
             {clients.length === 0 ? (
               <p className="no-data">No clients found or connecting to server...</p>
             ) : (
               clients.map((client) => (
                 <div key={client._id} className="client-card">
+                  <div className="client-avatar">
+                    {getInitial(client.name)}
+                  </div>
                   <div className="client-info">
                     <div className="name">{client.name}</div>
                     <div className="email">{client.email}</div>
@@ -251,11 +352,17 @@ function App() {
                     {client.status === 'approved' ? (
                       <span className="status-badge">Active</span>
                     ) : (
-                      <button className="btn-approve" onClick={() => handleApprove(client._id)}>
+                      <button
+                        className="btn-approve"
+                        onClick={() => handleApprove(client._id)}
+                      >
                         Approve
                       </button>
                     )}
-                    <button className="btn-danger" onClick={() => handleDeactivate(client._id)}>
+                    <button
+                      className="btn-danger"
+                      onClick={() => handleDeactivate(client._id)}
+                    >
                       Deactivate
                     </button>
                   </div>
@@ -264,6 +371,7 @@ function App() {
             )}
           </div>
         </div>
+
       </div>
     </div>
   )
