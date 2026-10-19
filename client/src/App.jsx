@@ -115,6 +115,7 @@ function App() {
   const [loading, setLoading] = useState(false)
   const [errors, setErrors] = useState({})
   const [touched, setTouched] = useState({})
+  const [submitError, setSubmitError] = useState('')
 
   useEffect(() => {
     fetchClients()
@@ -173,6 +174,7 @@ function App() {
       accessUrl: accessUrl,
     }
 
+    setSubmitError('')
     try {
       const res = await fetch(`${API_BASE_URL}/clients`, {
         method: 'POST',
@@ -183,7 +185,13 @@ function App() {
       if (res.ok) {
         const newClient = await res.json()
         setClients((prev) => [newClient, ...prev])
-        setAddedClient({ name: form.name, email: form.email, accessUrl: accessUrl })
+        setAddedClient({
+          name: form.name,
+          email: form.email,
+          lendingPage: form.lendingPage,
+          accessUrl: accessUrl,
+          emailSent: newClient.emailSent
+        })
         setForm({
           name: '',
           email: '',
@@ -192,9 +200,13 @@ function App() {
         })
         setErrors({})
         setTouched({})
+      } else {
+        const errData = await res.json().catch(() => ({}))
+        setSubmitError(errData.error || 'Server error: Failed to add client.')
       }
     } catch (err) {
       console.error('Error adding client:', err)
+      setSubmitError('Failed to connect to the server. Please check your internet or server status.')
     } finally {
       setLoading(false)
     }
@@ -340,26 +352,41 @@ function App() {
             )}
           </button>
 
+          {/* Error Message */}
+          {submitError && (
+            <div className="error-banner" style={{ marginTop: '20px', padding: '14px 18px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '12px', color: '#b91c1c', fontSize: '14px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span>⚠️</span>
+              <span>{submitError}</span>
+            </div>
+          )}
+
           {/* Success Box */}
           {addedClient && (
             <div className="success-box">
               <div className="success-row">
                 <span className="icon">✅</span>
-                <span>Client added successfully!</span>
+                <span>Client <strong>{addedClient.name}</strong> added successfully!</span>
               </div>
               <div className="success-row">
-                <span className="icon">✅</span>
-                <span>Email sent successfully!</span>
+                <span className="icon">{addedClient.emailSent ? '📨' : '⚠️'}</span>
+                <span>
+                  {addedClient.emailSent
+                    ? <>Email sent directly to <strong>{addedClient.email}</strong> with application link!</>
+                    : <>Client saved, but email could not be sent to <strong>{addedClient.email}</strong>. You can manually copy the link below.</>}
+                </span>
               </div>
               <div className="link-section">
-                <span className="link-label">🔗 Access URL:</span>
+                <div style={{ fontSize: '13px', fontWeight: '600', color: '#166534', marginBottom: '6px' }}>
+                  📄 Selected Page: <span style={{ fontWeight: '500' }}>{addedClient.lendingPage}</span>
+                </div>
+                <span className="link-label">🔗 Generated Client Access URL:</span>
                 <div className="url-text">{addedClient.accessUrl}</div>
                 <button
                   id="copy-url-btn"
                   className={`btn-copy ${copied ? 'copied' : ''}`}
                   onClick={handleCopyUrl}
                 >
-                  {copied ? 'Copied!' : 'Copy Link'}
+                  {copied ? 'Copied to Clipboard!' : 'Copy Link'}
                 </button>
               </div>
             </div>
