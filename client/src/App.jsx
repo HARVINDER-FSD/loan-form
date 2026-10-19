@@ -164,6 +164,8 @@ function App() {
 
     const selectedPage = LENDING_PAGES.find((p) => p.label === form.lendingPage)
     const accessUrl = selectedPage ? selectedPage.url : ''
+    const tokenMatch = accessUrl.match(/[?&]token=([^&]+)/)
+    const token = tokenMatch ? tokenMatch[1] : ''
 
     const clientData = {
       name: form.name,
@@ -172,6 +174,7 @@ function App() {
       expiryDuration: form.expiry,
       expires: expires,
       accessUrl: accessUrl,
+      token: token,
     }
 
     setSubmitError('')
@@ -190,6 +193,7 @@ function App() {
           email: form.email,
           lendingPage: form.lendingPage,
           accessUrl: accessUrl,
+          token: newClient.token || token,
           emailSent: newClient.emailSent
         })
         setForm({
@@ -408,36 +412,45 @@ function App() {
             {clients.length === 0 ? (
               <p className="no-data">No clients found or connecting to server...</p>
             ) : (
-              clients.map((client) => (
-                <div key={client._id} className="client-card">
-                  <div className="client-avatar">
-                    {getInitial(client.name)}
-                  </div>
-                  <div className="client-info">
-                    <div className="name">{client.name}</div>
-                    <div className="email">{client.email}</div>
-                    <div className="expiry">Expires: {client.expires}</div>
-                  </div>
-                  <div className="client-actions">
-                    {client.status === 'approved' ? (
-                      <span className="status-badge">Active</span>
-                    ) : (
+              clients.map((client) => {
+                const url = client.accessUrl || (client.lendingPage ? LENDING_PAGES.find((p) => p.label === client.lendingPage)?.url : '')
+
+                return (
+                  <div key={client._id} className="client-card">
+                    <div className="client-avatar">
+                      {getInitial(client.name)}
+                    </div>
+                    <div className="client-info">
+                      <div className="name">{client.name}</div>
+                      <div className="email">{client.email}</div>
+                      {url && (
+                        <div className="url">
+                          URL: <a href={url} target="_blank" rel="noopener noreferrer">{url}</a>
+                        </div>
+                      )}
+                      <div className="expiry">Expires: {client.expires}</div>
+                    </div>
+                    <div className="client-actions">
+                      {client.status === 'approved' ? (
+                        <span className="status-badge">Active</span>
+                      ) : (
+                        <button
+                          className="btn-approve"
+                          onClick={() => handleApprove(client._id)}
+                        >
+                          Approve
+                        </button>
+                      )}
                       <button
-                        className="btn-approve"
-                        onClick={() => handleApprove(client._id)}
+                        className="btn-danger"
+                        onClick={() => handleDeactivate(client._id)}
                       >
-                        Approve
+                        Deactivate
                       </button>
-                    )}
-                    <button
-                      className="btn-danger"
-                      onClick={() => handleDeactivate(client._id)}
-                    >
-                      Deactivate
-                    </button>
+                    </div>
                   </div>
-                </div>
-              ))
+                )
+              })
             )}
           </div>
         </div>

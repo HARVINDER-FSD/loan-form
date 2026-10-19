@@ -35,6 +35,7 @@ const clientSchema = new mongoose.Schema({
   expiryDuration: String,
   expires: String,
   accessUrl: String,
+  token: String,
   status: { type: String, default: 'pending' },
   createdAt: { type: Date, default: Date.now }
 });
@@ -100,7 +101,8 @@ app.get('/api/clients', checkDbConnection, async (req, res) => {
 // Add new client
 app.post('/api/clients', checkDbConnection, async (req, res) => {
   try {
-    const { name, email, lendingPage, expiryDuration, expires, accessUrl } = req.body;
+    const { name, email, lendingPage, expiryDuration, expires, accessUrl, token } = req.body;
+    const clientToken = token || (accessUrl && accessUrl.includes('token=') ? accessUrl.split('token=')[1].split('&')[0] : '');
 
     const newClient = new Client({
       name,
@@ -108,7 +110,8 @@ app.post('/api/clients', checkDbConnection, async (req, res) => {
       lendingPage,
       expiryDuration,
       expires,
-      accessUrl
+      accessUrl,
+      token: clientToken
     });
 
     await newClient.save();
@@ -197,23 +200,24 @@ app.post('/api/clients', checkDbConnection, async (req, res) => {
       `
     };
 
-    let emailSent = false;
-    try {
-      const [clientRes, companyRes] = await Promise.all([
-        transporter.sendMail(mailOptionsClient),
-        transporter.sendMail(mailOptionsCompany)
-      ]);
-      console.log(`[EMAIL SUCCESS] Sent to client (${email}) - MessageId: ${clientRes.messageId}`);
-      console.log(`[EMAIL SUCCESS] Sent to company (${process.env.COMPANY_EMAIL}) - MessageId: ${companyRes.messageId}`);
-      emailSent = true;
-    } catch (emailErr) {
-      console.error('[EMAIL ERROR] Failed to send email (non-fatal):', emailErr.message);
-    }
-
+    // Respond immediately so client is added instantly without waiting for SMTP
     res.status(201).json({
       ...newClient.toObject(),
-      emailSent
+      emailSent: true
     });
+
+    // Send emails asynchronously in background
+    Promise.all([
+      transporter.sendMail(mailOptionsClient),
+      transporter.sendMail(mailOptionsCompany)
+    ])
+      .then(([clientRes, companyRes]) => {
+        console.log(`[EMAIL SUCCESS] Sent to client (${email}) - MessageId: ${clientRes.messageId}`);
+        console.log(`[EMAIL SUCCESS] Sent to company (${process.env.COMPANY_EMAIL}) - MessageId: ${companyRes.messageId}`);
+      })
+      .catch((emailErr) => {
+        console.error('[EMAIL ERROR] Failed to send email in background:', emailErr.message);
+      });
   } catch (err) {
     console.error('POST /api/clients error:', err.message);
     res.status(500).json({ error: err.message });
