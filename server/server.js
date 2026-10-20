@@ -31,6 +31,7 @@ if (!mongoURI) {
 const clientSchema = new mongoose.Schema({
   name: String,
   email: String,
+  phone: String,
   lendingPage: String,
   expiryDuration: String,
   expires: String,
@@ -42,14 +43,33 @@ const clientSchema = new mongoose.Schema({
 
 const Client = mongoose.model('Client', clientSchema);
 
-// Email Transporter
+// Email Transporter (Use port 465 SSL and force IPv4 for cloud environments like Render)
 const transporter = nodemailer.createTransport({
-  service: 'gmail',
+  host: 'smtp.gmail.com',
+  port: 465,
+  secure: true,
+  family: 4,
   auth: {
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_PASS
+  },
+  tls: {
+    rejectUnauthorized: false
   }
 });
+
+// Verify email setup on startup
+if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
+  console.warn('⚠️ WARNING: EMAIL_USER or EMAIL_PASS is missing in environment variables. Email sending will fail on live server!');
+} else {
+  transporter.verify((err) => {
+    if (err) {
+      console.error('⚠️ Email transporter verification failed:', err.message);
+    } else {
+      console.log('✅ Email transporter verified and ready to send emails');
+    }
+  });
+}
 
 // Health check route
 app.get('/api/health', (req, res) => {
@@ -58,6 +78,11 @@ app.get('/api/health', (req, res) => {
     status: 'ok',
     database: dbStatus,
     hasMongoUri: Boolean(process.env.MONGODB_URI),
+    hasEmailUser: Boolean(process.env.EMAIL_USER),
+    hasEmailPass: Boolean(process.env.EMAIL_PASS),
+    hasCompanyEmail: Boolean(process.env.COMPANY_EMAIL),
+    emailUser: process.env.EMAIL_USER || 'NOT_CONFIGURED',
+    companyEmail: process.env.COMPANY_EMAIL || 'NOT_CONFIGURED',
     lastError: lastDbError
   });
 });
@@ -101,12 +126,13 @@ app.get('/api/clients', checkDbConnection, async (req, res) => {
 // Add new client
 app.post('/api/clients', checkDbConnection, async (req, res) => {
   try {
-    const { name, email, lendingPage, expiryDuration, expires, accessUrl, token } = req.body;
+    const { name, email, phone, lendingPage, expiryDuration, expires, accessUrl, token } = req.body;
     const clientToken = token || (accessUrl && accessUrl.includes('token=') ? accessUrl.split('token=')[1].split('&')[0] : '');
 
     const newClient = new Client({
       name,
       email,
+      phone: phone || '',
       lendingPage,
       expiryDuration,
       expires,
@@ -116,7 +142,7 @@ app.post('/api/clients', checkDbConnection, async (req, res) => {
 
     await newClient.save();
 
-    // Send emails with professional HTML templates & plain text fallback
+    // Prepare email options
     const mailOptionsClient = {
       from: `"Loan Hub" <${process.env.EMAIL_USER}>`,
       to: email,
@@ -158,6 +184,7 @@ app.post('/api/clients', checkDbConnection, async (req, res) => {
               
               <div class="info-card">
                 <div class="info-row"><span class="info-label">Application Form:</span> <span class="info-value">${lendingPage}</span></div>
+                ${phone ? `<div class="info-row"><span class="info-label">Phone Number:</span> <span class="info-value">${phone}</span></div>` : ''}
                 <div class="info-row"><span class="info-label">Access Duration:</span> <span class="info-value">${expiryDuration}</span></div>
                 <div class="info-row" style="margin-bottom:0;"><span class="info-label">Expires On:</span> <span class="info-value" style="color: #dc2626;">${expires}</span></div>
               </div>
@@ -181,16 +208,18 @@ app.post('/api/clients', checkDbConnection, async (req, res) => {
       `
     };
 
+    const companyTarget = process.env.COMPANY_EMAIL || process.env.EMAIL_USER;
     const mailOptionsCompany = {
       from: `"Loan Hub Notification" <${process.env.EMAIL_USER}>`,
-      to: process.env.COMPANY_EMAIL,
+      to: companyTarget,
       subject: `New Client Added: ${name} (${lendingPage})`,
       html: `
         <div style="font-family: sans-serif; max-width: 560px; padding: 20px; border: 1px solid #e2e8f0; border-radius: 12px; background: #ffffff;">
           <h2 style="color: #1e293b; margin-top: 0;">New Client Added Successfully</h2>
           <table style="width: 100%; border-collapse: collapse; font-size: 14px; margin-top: 16px;">
-            <tr><td style="padding: 8px 0; color: #64748b; font-weight: bold;">Client Name:</td><td style="color: #0f172a;">${name}</td></tr>
+            <tr><td style="padding: 8px 0; color: #64748b; font-weight: bold; width: 140px;">Client Name:</td><td style="color: #0f172a;">${name}</td></tr>
             <tr><td style="padding: 8px 0; color: #64748b; font-weight: bold;">Client Email:</td><td style="color: #0f172a;"><a href="mailto:${email}">${email}</a></td></tr>
+            <tr><td style="padding: 8px 0; color: #64748b; font-weight: bold;">Client Phone:</td><td style="color: #0f172a;">${phone || 'Not provided'}</td></tr>
             <tr><td style="padding: 8px 0; color: #64748b; font-weight: bold;">Selected Page:</td><td style="color: #0f172a;">${lendingPage}</td></tr>
             <tr><td style="padding: 8px 0; color: #64748b; font-weight: bold;">Token Expiry:</td><td style="color: #dc2626;">${expires} (${expiryDuration})</td></tr>
             <tr><td style="padding: 8px 0; color: #64748b; font-weight: bold;">Access URL:</td><td><a href="${accessUrl}">${accessUrl}</a></td></tr>
@@ -200,24 +229,50 @@ app.post('/api/clients', checkDbConnection, async (req, res) => {
       `
     };
 
-    // Respond immediately so client is added instantly without waiting for SMTP
-    res.status(201).json({
-      ...newClient.toObject(),
-      emailSent: true
-    });
+    // Attempt sending emails
+    let emailSent = false;
+    let emailError = null;
 
-    // Send emails asynchronously in background
-    Promise.all([
-      transporter.sendMail(mailOptionsClient),
-      transporter.sendMail(mailOptionsCompany)
-    ])
-      .then(([clientRes, companyRes]) => {
-        console.log(`[EMAIL SUCCESS] Sent to client (${email}) - MessageId: ${clientRes.messageId}`);
-        console.log(`[EMAIL SUCCESS] Sent to company (${process.env.COMPANY_EMAIL}) - MessageId: ${companyRes.messageId}`);
-      })
-      .catch((emailErr) => {
-        console.error('[EMAIL ERROR] Failed to send email in background:', emailErr.message);
-      });
+    if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
+      emailError = 'EMAIL_USER or EMAIL_PASS environment variables are not set on this server.';
+      console.error('[EMAIL CONFIG ERROR]', emailError);
+    } else {
+      try {
+        const sendPromises = [transporter.sendMail(mailOptionsClient)];
+        if (companyTarget) {
+          sendPromises.push(transporter.sendMail(mailOptionsCompany));
+        }
+
+        const results = await Promise.allSettled(sendPromises);
+        const clientResult = results[0];
+        const companyResult = results[1];
+
+        if (clientResult.status === 'fulfilled') {
+          console.log(`[EMAIL SUCCESS] Sent to client (${email}) - MessageId: ${clientResult.value.messageId}`);
+          emailSent = true;
+        } else {
+          console.error(`[EMAIL CLIENT FAILED] ${clientResult.reason?.message || clientResult.reason}`);
+          emailError = clientResult.reason?.message || 'Failed to send to client';
+        }
+
+        if (companyResult) {
+          if (companyResult.status === 'fulfilled') {
+            console.log(`[EMAIL SUCCESS] Sent to company (${companyTarget}) - MessageId: ${companyResult.value.messageId}`);
+          } else {
+            console.error(`[EMAIL COMPANY FAILED] ${companyResult.reason?.message || companyResult.reason}`);
+          }
+        }
+      } catch (sendErr) {
+        console.error('[EMAIL ERROR] Sending failed:', sendErr.message);
+        emailError = sendErr.message;
+      }
+    }
+
+    return res.status(201).json({
+      ...newClient.toObject(),
+      emailSent,
+      emailError
+    });
   } catch (err) {
     console.error('POST /api/clients error:', err.message);
     res.status(500).json({ error: err.message });

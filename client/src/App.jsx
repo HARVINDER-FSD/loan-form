@@ -15,6 +15,11 @@ function validateForm(form) {
   } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) {
     errors.email = 'Please enter a valid email address.'
   }
+  if (!form.phone.trim()) {
+    errors.phone = 'Phone number is required.'
+  } else if (!/^[+0-9\s\-()]{7,20}$/.test(form.phone.trim())) {
+    errors.phone = 'Please enter a valid phone number (at least 7 digits).'
+  }
   return errors
 }
 
@@ -106,6 +111,7 @@ function App() {
   const [form, setForm] = useState({
     name: '',
     email: '',
+    phone: '',
     lendingPage: LENDING_PAGES[0].label,
     expiry: '30 Days',
   })
@@ -149,7 +155,7 @@ function App() {
   const handleAddClient = async () => {
     const newErrors = validateForm(form)
     setErrors(newErrors)
-    setTouched({ name: true, email: true })
+    setTouched({ name: true, email: true, phone: true })
     if (Object.keys(newErrors).length > 0) return
     setLoading(true)
 
@@ -170,6 +176,7 @@ function App() {
     const clientData = {
       name: form.name,
       email: form.email,
+      phone: form.phone,
       lendingPage: form.lendingPage,
       expiryDuration: form.expiry,
       expires: expires,
@@ -191,14 +198,17 @@ function App() {
         setAddedClient({
           name: form.name,
           email: form.email,
+          phone: form.phone,
           lendingPage: form.lendingPage,
           accessUrl: accessUrl,
           token: newClient.token || token,
-          emailSent: newClient.emailSent
+          emailSent: newClient.emailSent,
+          emailError: newClient.emailError
         })
         setForm({
           name: '',
           email: '',
+          phone: '',
           lendingPage: LENDING_PAGES[0].label,
           expiry: '30 Days',
         })
@@ -312,6 +322,23 @@ function App() {
             )}
           </div>
 
+          {/* Client Phone */}
+          <div className="form-group">
+            <label htmlFor="client-phone">Phone Number</label>
+            <input
+              id="client-phone"
+              type="tel"
+              value={form.phone}
+              onChange={(e) => handleChange('phone', e.target.value)}
+              onBlur={() => handleBlur('phone')}
+              placeholder="Enter phone number"
+              className={touched.phone && errors.phone ? 'input-error' : ''}
+            />
+            {touched.phone && errors.phone && (
+              <span className="error-msg">⚠ {errors.phone}</span>
+            )}
+          </div>
+
           {/* Lending Page */}
           <div className="form-group">
             <label htmlFor="lending-page">Lending Page</label>
@@ -371,12 +398,27 @@ function App() {
                 <span className="icon">✅</span>
                 <span>Client <strong>{addedClient.name}</strong> added successfully!</span>
               </div>
+              {addedClient.phone && (
+                <div className="success-row">
+                  <span className="icon">📞</span>
+                  <span>Phone: <strong>{addedClient.phone}</strong></span>
+                </div>
+              )}
               <div className="success-row">
                 <span className="icon">{addedClient.emailSent ? '📨' : '⚠️'}</span>
                 <span>
-                  {addedClient.emailSent
-                    ? <>Email sent directly to <strong>{addedClient.email}</strong> with application link!</>
-                    : <>Client saved, but email could not be sent to <strong>{addedClient.email}</strong>. You can manually copy the link below.</>}
+                  {addedClient.emailSent ? (
+                    <>Email sent directly to <strong>{addedClient.email}</strong> and notification sent to company!</>
+                  ) : (
+                    <>
+                      Client saved, but email could not be sent to <strong>{addedClient.email}</strong>.
+                      {addedClient.emailError && (
+                        <div style={{ fontSize: '12px', color: '#b91c1c', marginTop: '4px' }}>
+                          Reason: {addedClient.emailError}
+                        </div>
+                      )}
+                    </>
+                  )}
                 </span>
               </div>
               <div className="link-section">
@@ -423,6 +465,11 @@ function App() {
                     <div className="client-info">
                       <div className="name">{client.name}</div>
                       <div className="email">{client.email}</div>
+                      {client.phone && (
+                        <div className="phone" style={{ fontSize: '12.5px', color: '#475569', marginTop: '2px', fontWeight: '500' }}>
+                          📞 {client.phone}
+                        </div>
+                      )}
                       {url && (
                         <div className="url">
                           URL: <a href={url} target="_blank" rel="noopener noreferrer">{url}</a>
