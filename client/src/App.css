@@ -5,32 +5,48 @@
 /* ---------- PAGE LAYOUT ---------- */
 .page {
   min-height: 100vh;
-  background-color: #f8fafc;
+  position: relative;
+  background-color: #f8f9fa; /* Off-white */
   padding: 48px 20px 80px;
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  overflow-x: hidden;
+}
+
+/* Top Background Banner — Pure Image */
+.page::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 60vh; /* Taller background banner */
+  min-height: 440px;
+  background-image: url('./assets/bg.jpg');
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  pointer-events: none;
+  z-index: 0;
 }
 
 .container {
   max-width: 600px;
   margin: 0 auto;
+  padding-top: 100px;
   padding-bottom: 300px;
-}
-
-/* ---------- HEADER ---------- */
-.header {
-  text-align: center;
-  margin-bottom: 36px;
+  position: relative;
+  z-index: 1;
 }
 
 .header-badge {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  background: #eff6ff;
-  border: 1px solid #bfdbfe;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
   color: #2563eb;
   font-size: 12px;
-  font-weight: 600;
+  font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
   padding: 6px 14px;
@@ -52,30 +68,26 @@
 }
 
 .page-title {
-  font-size: 30px;
+  font-size: 44px;
   font-weight: 900;
   letter-spacing: -0.04em;
-  color: #1e293b;
-  margin-bottom: 8px;
+  color: #000000;
+  text-shadow:
+    0 0 12px rgba(255, 255, 255, 0.95),
+    0 0 24px rgba(255, 255, 255, 0.85),
+    0 0 40px rgba(255, 255, 255, 0.7);
+  margin-bottom: 0;
   line-height: 1.2;
 }
 
-.page-subtitle {
-  color: #94a3b8;
-  font-size: 14px;
-  font-weight: 400;
-}
-
-/* ---------- FORM CARD ---------- */
+/* ---------- FORM CARD (Clean, Flat, No Shadow) ---------- */
 .form-card {
   background: #ffffff;
-  border: 1px solid rgba(229, 231, 235, 0.8);
-  border-radius: 24px;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
   padding: 36px;
-  margin-bottom: 60px;
-  box-shadow:
-    0 10px 15px -3px rgba(0, 0, 0, 0.05),
-    0 4px 6px -2px rgba(0, 0, 0, 0.02);
+  margin-bottom: 50px;
+  box-shadow: none;
   position: relative;
   z-index: 10;
   animation: slide-up 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
@@ -94,6 +106,18 @@
   display: flex;
   align-items: center;
   gap: 10px;
+}
+
+.card-title-center {
+  font-size: 22px;
+  font-weight: 800;
+  color: #0f172a;
+  margin-bottom: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  letter-spacing: -0.02em;
 }
 
 .card-title-icon {
@@ -137,7 +161,7 @@
   color: #0f172a;
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   display: block;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  box-shadow: none;
 }
 
 .form-group input::placeholder {
@@ -229,13 +253,13 @@
 .btn-primary {
   background-color: #2563eb;
   color: #ffffff;
-  box-shadow: 0 4px 6px -1px rgba(37, 99, 235, 0.2);
+  box-shadow: none;
 }
 
 .btn-primary:hover:not(:disabled) {
   background-color: #1d4ed8;
-  transform: translateY(-1px);
-  box-shadow: 0 10px 15px -3px rgba(37, 99, 235, 0.3);
+  transform: none;
+  box-shadow: none;
 }
 
 .btn-primary:active:not(:disabled) {
@@ -484,31 +508,31 @@
 
 .no-data {
   text-align: center;
-  color: #94a3b8;
+  color: #64748b;
   font-size: 14px;
   padding: 40px 20px;
   background: #ffffff;
-  border: 1px dashed #e2e8f0;
-  border-radius: 16px;
+  border: 1px dashed #cbd5e1;
+  border-radius: 14px;
 }
 
-/* ---------- CLIENT CARD ---------- */
+/* ---------- CLIENT CARD (Clean, Flat, No Shadow) ---------- */
 .client-card {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 18px 22px;
-  border: 1px solid #f1f5f9;
-  border-radius: 16px;
+  padding: 16px 20px;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
   background: #ffffff;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: none;
+  transition: border-color 0.15s ease;
 }
 
 .client-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.08);
-  border-color: #e2e8f0;
+  transform: none;
+  box-shadow: none;
+  border-color: #94a3b8;
 }
 
 .client-avatar {

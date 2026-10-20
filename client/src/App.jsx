@@ -281,21 +281,10 @@ function App() {
     <div className="page">
       <div className="container">
 
-        {/* ── HEADER ── */}
-        <div className="header">
-          <div className="header-badge">
-            <span className="header-badge-dot" />
-            Admin Panel
-          </div>
-          <h1 className="page-title">Manage Clients</h1>
-          <p className="page-subtitle">Create access links and manage loan client accounts</p>
-        </div>
-
-        {/* ── ADD CLIENT FORM ── */}
+        {/* ── CLIENT FORM ── */}
         <div className="form-card">
-          <div className="card-title">
-            <div className="card-title-icon">+</div>
-            Add New Client
+          <div className="card-title card-title-center">
+            Admin Panel
           </div>
 
           {/* Client Name */}
