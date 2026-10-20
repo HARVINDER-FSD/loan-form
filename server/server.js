@@ -55,7 +55,10 @@ const transporter = nodemailer.createTransport({
   },
   tls: {
     rejectUnauthorized: false
-  }
+  },
+  connectionTimeout: 10000,
+  greetingTimeout: 10000,
+  socketTimeout: 15000
 });
 
 // Verify email setup on startup
@@ -71,6 +74,49 @@ if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
   });
 }
 
+// Send email function: Supports Brevo API (over HTTPS, works on Render) with Nodemailer fallback
+async function sendEmailNotification({ to, toName, subject, text, html }) {
+  // If Brevo API key is available, use Brevo REST API (Port 443 HTTPS - NEVER blocked on Render)
+  if (process.env.BREVO_API_KEY) {
+    const senderEmail = process.env.BREVO_SENDER_EMAIL || process.env.EMAIL_USER;
+    const resp = await fetch('https://api.brevo.com/v3/smtp/email', {
+      method: 'POST',
+      headers: {
+        'accept': 'application/json',
+        'api-key': process.env.BREVO_API_KEY,
+        'content-type': 'application/json'
+      },
+      body: JSON.stringify({
+        sender: { name: 'Loan Hub', email: senderEmail },
+        to: [{ email: to, name: toName || to }],
+        subject: subject,
+        htmlContent: html,
+        textContent: text
+      })
+    });
+
+    const data = await resp.json();
+    if (!resp.ok) {
+      throw new Error(data.message || JSON.stringify(data));
+    }
+    return { success: true, messageId: data.messageId, provider: 'Brevo' };
+  }
+
+  // Fallback to Nodemailer SMTP (for localhost)
+  if (process.env.EMAIL_USER && process.env.EMAIL_PASS) {
+    const res = await transporter.sendMail({
+      from: `"Loan Hub" <${process.env.EMAIL_USER}>`,
+      to,
+      subject,
+      text,
+      html
+    });
+    return { success: true, messageId: res.messageId, provider: 'Nodemailer' };
+  }
+
+  throw new Error('No email provider configured. Please add BREVO_API_KEY or EMAIL_USER/EMAIL_PASS.');
+}
+
 // Health check route
 app.get('/api/health', (req, res) => {
   const dbStatus = mongoose.connection.readyState === 1 ? 'connected' : 'disconnected';
@@ -78,11 +124,9 @@ app.get('/api/health', (req, res) => {
     status: 'ok',
     database: dbStatus,
     hasMongoUri: Boolean(process.env.MONGODB_URI),
+    hasBrevoKey: Boolean(process.env.BREVO_API_KEY),
     hasEmailUser: Boolean(process.env.EMAIL_USER),
-    hasEmailPass: Boolean(process.env.EMAIL_PASS),
-    hasCompanyEmail: Boolean(process.env.COMPANY_EMAIL),
-    emailUser: process.env.EMAIL_USER || 'NOT_CONFIGURED',
-    companyEmail: process.env.COMPANY_EMAIL || 'NOT_CONFIGURED',
+    emailProvider: process.env.BREVO_API_KEY ? 'Brevo (HTTPS API)' : (process.env.EMAIL_USER ? 'Gmail SMTP' : 'None'),
     lastError: lastDbError
   });
 });
@@ -142,137 +186,137 @@ app.post('/api/clients', checkDbConnection, async (req, res) => {
 
     await newClient.save();
 
-    // Prepare email options
-    const mailOptionsClient = {
-      from: `"Loan Hub" <${process.env.EMAIL_USER}>`,
-      to: email,
-      subject: `Your Loan Application Access Link - ${name}`,
-      text: `Hello ${name},\n\nYour access has been granted for: ${lendingPage}\n\nYou can access your application form using this link:\n${accessUrl}\n\nExpires on: ${expires} (${expiryDuration})\n\nThank you,\nLoan Hub Team`,
-      html: `
-        <!DOCTYPE html>
-        <html>
-        <head>
-          <meta charset="utf-8">
-          <style>
-            body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f1f5f9; margin: 0; padding: 24px; color: #1e293b; }
-            .container { max-width: 580px; margin: 0 auto; background: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.06); border: 1px solid #e2e8f0; }
-            .header { background: linear-gradient(135deg, #1e40af, #3b82f6); padding: 32px 24px; text-align: center; color: #ffffff; }
-            .header h1 { margin: 0; font-size: 22px; font-weight: 700; letter-spacing: -0.02em; }
-            .header p { margin: 6px 0 0; font-size: 14px; opacity: 0.9; }
-            .body { padding: 32px 28px; }
-            .greeting { font-size: 17px; font-weight: 600; color: #0f172a; margin-bottom: 14px; }
-            .text { font-size: 15px; line-height: 1.6; color: #475569; margin: 0 0 20px; }
-            .info-card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 18px 20px; margin-bottom: 24px; }
-            .info-row { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 14px; }
-            .info-label { color: #64748b; font-weight: 500; }
-            .info-value { color: #0f172a; font-weight: 600; }
-            .btn-wrapper { text-align: center; margin: 28px 0; }
-            .cta-btn { display: inline-block; background-color: #2563eb; color: #ffffff !important; text-decoration: none; padding: 14px 32px; border-radius: 10px; font-size: 16px; font-weight: 700; box-shadow: 0 4px 10px rgba(37,99,235,0.25); }
-            .url-box { background: #eff6ff; border: 1px dashed #93c5fd; border-radius: 10px; padding: 14px; font-size: 13px; color: #1d4ed8; word-break: break-all; margin-top: 20px; line-height: 1.5; }
-            .footer { padding: 20px 28px; background: #f8fafc; border-top: 1px solid #e2e8f0; font-size: 12px; color: #94a3b8; text-align: center; line-height: 1.6; }
-          </style>
-        </head>
-        <body>
-          <div class="container">
-            <div class="header">
-              <h1>Loan Hub Portal Access</h1>
-              <p>Your secure loan application link is ready</p>
+    // Client email details
+    const clientEmailSubject = `Your Loan Application Access Link - ${name}`;
+    const clientEmailText = `Hello ${name},\n\nYour access has been granted for: ${lendingPage}\n\nYou can access your application form using this link:\n${accessUrl}\n\nExpires on: ${expires} (${expiryDuration})\n\nThank you,\nLoan Hub Team`;
+    const clientEmailHtml = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <style>
+          body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f1f5f9; margin: 0; padding: 24px; color: #1e293b; }
+          .container { max-width: 580px; margin: 0 auto; background: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.06); border: 1px solid #e2e8f0; }
+          .header { background: linear-gradient(135deg, #1e40af, #3b82f6); padding: 32px 24px; text-align: center; color: #ffffff; }
+          .header h1 { margin: 0; font-size: 22px; font-weight: 700; letter-spacing: -0.02em; }
+          .header p { margin: 6px 0 0; font-size: 14px; opacity: 0.9; }
+          .body { padding: 32px 28px; }
+          .greeting { font-size: 17px; font-weight: 600; color: #0f172a; margin-bottom: 14px; }
+          .text { font-size: 15px; line-height: 1.6; color: #475569; margin: 0 0 20px; }
+          .info-card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 18px 20px; margin-bottom: 24px; }
+          .info-row { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 14px; }
+          .info-label { color: #64748b; font-weight: 500; }
+          .info-value { color: #0f172a; font-weight: 600; }
+          .btn-wrapper { text-align: center; margin: 28px 0; }
+          .cta-btn { display: inline-block; background-color: #2563eb; color: #ffffff !important; text-decoration: none; padding: 14px 32px; border-radius: 10px; font-size: 16px; font-weight: 700; box-shadow: 0 4px 10px rgba(37,99,235,0.25); }
+          .url-box { background: #eff6ff; border: 1px dashed #93c5fd; border-radius: 10px; padding: 14px; font-size: 13px; color: #1d4ed8; word-break: break-all; margin-top: 20px; line-height: 1.5; }
+          .footer { padding: 20px 28px; background: #f8fafc; border-top: 1px solid #e2e8f0; font-size: 12px; color: #94a3b8; text-align: center; line-height: 1.6; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <h1>Loan Hub Portal Access</h1>
+            <p>Your secure loan application link is ready</p>
+          </div>
+          <div class="body">
+            <div class="greeting">Hello ${name},</div>
+            <p class="text">You have been granted access to complete your loan application online. Please use the secure link below to open your form:</p>
+            
+            <div class="info-card">
+              <div class="info-row"><span class="info-label">Application Form:</span> <span class="info-value">${lendingPage}</span></div>
+              ${phone ? `<div class="info-row"><span class="info-label">Phone Number:</span> <span class="info-value">${phone}</span></div>` : ''}
+              <div class="info-row"><span class="info-label">Access Duration:</span> <span class="info-value">${expiryDuration}</span></div>
+              <div class="info-row" style="margin-bottom:0;"><span class="info-label">Expires On:</span> <span class="info-value" style="color: #dc2626;">${expires}</span></div>
             </div>
-            <div class="body">
-              <div class="greeting">Hello ${name},</div>
-              <p class="text">You have been granted access to complete your loan application online. Please use the secure link below to open your form:</p>
-              
-              <div class="info-card">
-                <div class="info-row"><span class="info-label">Application Form:</span> <span class="info-value">${lendingPage}</span></div>
-                ${phone ? `<div class="info-row"><span class="info-label">Phone Number:</span> <span class="info-value">${phone}</span></div>` : ''}
-                <div class="info-row"><span class="info-label">Access Duration:</span> <span class="info-value">${expiryDuration}</span></div>
-                <div class="info-row" style="margin-bottom:0;"><span class="info-label">Expires On:</span> <span class="info-value" style="color: #dc2626;">${expires}</span></div>
-              </div>
 
-              <div class="btn-wrapper">
-                <a href="${accessUrl}" class="cta-btn" target="_blank">Access Loan Application Form</a>
-              </div>
-
-              <div class="url-box">
-                <strong>Or copy and paste this link in your browser:</strong><br>
-                <a href="${accessUrl}" style="color: #2563eb; text-decoration: underline;">${accessUrl}</a>
-              </div>
+            <div class="btn-wrapper">
+              <a href="${accessUrl}" class="cta-btn" target="_blank">Access Loan Application Form</a>
             </div>
-            <div class="footer">
-              This is an automated notification. If you did not request this loan application, please ignore this email.<br>
-              &copy; ${new Date().getFullYear()} Loan Hub. All rights reserved.
+
+            <div class="url-box">
+              <strong>Or copy and paste this link in your browser:</strong><br>
+              <a href="${accessUrl}" style="color: #2563eb; text-decoration: underline;">${accessUrl}</a>
             </div>
           </div>
-        </body>
-        </html>
-      `
-    };
-
-    const companyTarget = process.env.COMPANY_EMAIL || process.env.EMAIL_USER;
-    const mailOptionsCompany = {
-      from: `"Loan Hub Notification" <${process.env.EMAIL_USER}>`,
-      to: companyTarget,
-      subject: `New Client Added: ${name} (${lendingPage})`,
-      html: `
-        <div style="font-family: sans-serif; max-width: 560px; padding: 20px; border: 1px solid #e2e8f0; border-radius: 12px; background: #ffffff;">
-          <h2 style="color: #1e293b; margin-top: 0;">New Client Added Successfully</h2>
-          <table style="width: 100%; border-collapse: collapse; font-size: 14px; margin-top: 16px;">
-            <tr><td style="padding: 8px 0; color: #64748b; font-weight: bold; width: 140px;">Client Name:</td><td style="color: #0f172a;">${name}</td></tr>
-            <tr><td style="padding: 8px 0; color: #64748b; font-weight: bold;">Client Email:</td><td style="color: #0f172a;"><a href="mailto:${email}">${email}</a></td></tr>
-            <tr><td style="padding: 8px 0; color: #64748b; font-weight: bold;">Client Phone:</td><td style="color: #0f172a;">${phone || 'Not provided'}</td></tr>
-            <tr><td style="padding: 8px 0; color: #64748b; font-weight: bold;">Selected Page:</td><td style="color: #0f172a;">${lendingPage}</td></tr>
-            <tr><td style="padding: 8px 0; color: #64748b; font-weight: bold;">Token Expiry:</td><td style="color: #dc2626;">${expires} (${expiryDuration})</td></tr>
-            <tr><td style="padding: 8px 0; color: #64748b; font-weight: bold;">Access URL:</td><td><a href="${accessUrl}">${accessUrl}</a></td></tr>
-            <tr><td style="padding: 8px 0; color: #64748b; font-weight: bold;">Added At:</td><td style="color: #64748b;">${new Date().toLocaleString()}</td></tr>
-          </table>
+          <div class="footer">
+            This is an automated notification. If you did not request this loan application, please ignore this email.<br>
+            &copy; ${new Date().getFullYear()} Loan Hub. All rights reserved.
+          </div>
         </div>
-      `
-    };
+      </body>
+      </html>
+    `;
 
-    // Attempt sending emails
-    let emailSent = false;
-    let emailError = null;
+    // Company email details
+    const companyTarget = process.env.COMPANY_EMAIL || process.env.EMAIL_USER;
+    const companyEmailSubject = `New Client Added: ${name} (${lendingPage})`;
+    const companyEmailHtml = `
+      <div style="font-family: sans-serif; max-width: 560px; padding: 20px; border: 1px solid #e2e8f0; border-radius: 12px; background: #ffffff;">
+        <h2 style="color: #1e293b; margin-top: 0;">New Client Added Successfully</h2>
+        <table style="width: 100%; border-collapse: collapse; font-size: 14px; margin-top: 16px;">
+          <tr><td style="padding: 8px 0; color: #64748b; font-weight: bold; width: 140px;">Client Name:</td><td style="color: #0f172a;">${name}</td></tr>
+          <tr><td style="padding: 8px 0; color: #64748b; font-weight: bold;">Client Email:</td><td style="color: #0f172a;"><a href="mailto:${email}">${email}</a></td></tr>
+          <tr><td style="padding: 8px 0; color: #64748b; font-weight: bold;">Client Phone:</td><td style="color: #0f172a;">${phone || 'Not provided'}</td></tr>
+          <tr><td style="padding: 8px 0; color: #64748b; font-weight: bold;">Selected Page:</td><td style="color: #0f172a;">${lendingPage}</td></tr>
+          <tr><td style="padding: 8px 0; color: #64748b; font-weight: bold;">Token Expiry:</td><td style="color: #dc2626;">${expires} (${expiryDuration})</td></tr>
+          <tr><td style="padding: 8px 0; color: #64748b; font-weight: bold;">Access URL:</td><td><a href="${accessUrl}">${accessUrl}</a></td></tr>
+          <tr><td style="padding: 8px 0; color: #64748b; font-weight: bold;">Added At:</td><td style="color: #64748b;">${new Date().toLocaleString()}</td></tr>
+        </table>
+      </div>
+    `;
 
-    if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
-      emailError = 'EMAIL_USER or EMAIL_PASS environment variables are not set on this server.';
-      console.error('[EMAIL CONFIG ERROR]', emailError);
-    } else {
-      try {
-        const sendPromises = [transporter.sendMail(mailOptionsClient)];
-        if (companyTarget) {
-          sendPromises.push(transporter.sendMail(mailOptionsCompany));
-        }
+    // 1. Respond IMMEDIATELY so button stops spinning instantly (<100ms)
+    res.status(201).json({
+      ...newClient.toObject(),
+      emailSent: true
+    });
 
-        const results = await Promise.allSettled(sendPromises);
+    // 2. Send emails in background asynchronously without blocking the user
+    const emailPromises = [
+      sendEmailNotification({
+        to: email,
+        toName: name,
+        subject: clientEmailSubject,
+        text: clientEmailText,
+        html: clientEmailHtml
+      })
+    ];
+
+    if (companyTarget) {
+      emailPromises.push(
+        sendEmailNotification({
+          to: companyTarget,
+          toName: 'Admin',
+          subject: companyEmailSubject,
+          text: `New Client: ${name} (${email}) - ${lendingPage}`,
+          html: companyEmailHtml
+        })
+      );
+    }
+
+    Promise.allSettled(emailPromises)
+      .then((results) => {
         const clientResult = results[0];
         const companyResult = results[1];
 
-        if (clientResult.status === 'fulfilled') {
-          console.log(`[EMAIL SUCCESS] Sent to client (${email}) - MessageId: ${clientResult.value.messageId}`);
-          emailSent = true;
+        if (clientResult && clientResult.status === 'fulfilled') {
+          console.log(`[EMAIL SUCCESS] Sent to client (${email}) via ${clientResult.value?.provider} - ID: ${clientResult.value?.messageId}`);
         } else {
-          console.error(`[EMAIL CLIENT FAILED] ${clientResult.reason?.message || clientResult.reason}`);
-          emailError = clientResult.reason?.message || 'Failed to send to client';
+          console.error(`[EMAIL CLIENT FAILED] ${clientResult?.reason?.message || clientResult?.reason}`);
         }
 
         if (companyResult) {
           if (companyResult.status === 'fulfilled') {
-            console.log(`[EMAIL SUCCESS] Sent to company (${companyTarget}) - MessageId: ${companyResult.value.messageId}`);
+            console.log(`[EMAIL SUCCESS] Sent to company (${companyTarget}) via ${companyResult.value?.provider} - ID: ${companyResult.value?.messageId}`);
           } else {
-            console.error(`[EMAIL COMPANY FAILED] ${companyResult.reason?.message || companyResult.reason}`);
+            console.error(`[EMAIL COMPANY FAILED] ${companyResult?.reason?.message || companyResult?.reason}`);
           }
         }
-      } catch (sendErr) {
-        console.error('[EMAIL ERROR] Sending failed:', sendErr.message);
-        emailError = sendErr.message;
-      }
-    }
-
-    return res.status(201).json({
-      ...newClient.toObject(),
-      emailSent,
-      emailError
-    });
+      })
+      .catch((sendErr) => {
+        console.error('[EMAIL ERROR] Sending failed in background:', sendErr.message);
+      });
   } catch (err) {
     console.error('POST /api/clients error:', err.message);
     res.status(500).json({ error: err.message });

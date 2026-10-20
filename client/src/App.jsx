@@ -185,12 +185,17 @@ function App() {
     }
 
     setSubmitError('')
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 15000)
+
     try {
       const res = await fetch(`${API_BASE_URL}/clients`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(clientData),
+        signal: controller.signal,
       })
+      clearTimeout(timeoutId)
 
       if (res.ok) {
         const newClient = await res.json()
@@ -219,8 +224,13 @@ function App() {
         setSubmitError(errData.error || 'Server error: Failed to add client.')
       }
     } catch (err) {
+      clearTimeout(timeoutId)
       console.error('Error adding client:', err)
-      setSubmitError('Failed to connect to the server. Please check your internet or server status.')
+      if (err.name === 'AbortError') {
+        setSubmitError('Server took too long to respond (timeout). Render server may be waking up, please try again.')
+      } else {
+        setSubmitError('Failed to connect to the server. Please check your internet or server status.')
+      }
     } finally {
       setLoading(false)
     }
