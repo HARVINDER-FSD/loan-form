@@ -28,17 +28,17 @@ const LENDING_PAGES = [
   {
     label: 'Advance America Style Page',
     icon: '🏛️',
-    url: 'https://loan-hub-usa-eight.vercel.app/advanceamerica-apply?token=umqirueuumv7rrzjy',
+    url: 'https://loanendignpages-landing-1.vercel.app/?token=abc123xyz789def456ghi',
   },
   {
     label: 'Standard Apply Page',
     icon: '📋',
-    url: 'https://loan-hub-usa-eight.vercel.app/standalone-apply?token=jhdv9aj5i3amv7rt704',
+    url: 'https://loanendignpages-landing-2.vercel.app/?token=jkl789mno456pqr123stu',
   },
   {
     label: 'Standard Approve Page',
     icon: '📋',
-    url: 'https://loan-hub-usa-eight.vercel.app/standard-approve?token=1sm13f8wv65mv7rv323',
+    url: 'https://loanendignpages-landing-3.vercel.app/?token=vwx456yza123bcd789efg',
   },
 ]
 
@@ -130,6 +130,11 @@ function App() {
   const fetchClients = async () => {
     try {
       const res = await fetch(`${API_BASE_URL}/clients`)
+      if (!res.ok) {
+        console.error(`Server error: ${res.status}`)
+        setClients([])
+        return
+      }
       const data = await res.json()
       setClients(Array.isArray(data) ? data : [])
     } catch (err) {
