@@ -40,6 +40,11 @@ const LENDING_PAGES = [
     icon: '📋',
     url: 'https://loanendignpages-landing-3.vercel.app/?token=vwx456yza123bcd789efg',
   },
+  {
+    label: 'Landing Page 4',
+    icon: '🎯',
+    url: 'https://loanendignpages-landing-4.vercel.app/?token=hij890klm567nop234qrs',
+  },
 ]
 
 const EXPIRY_DURATIONS = Array.from({ length: 30 }, (_, i) => {
